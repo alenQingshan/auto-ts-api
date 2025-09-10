@@ -28,6 +28,9 @@ npm install
 ### 配置Swagger文件
 
 确保在项目根目录下有一个有效的Swagger JSON文件，命名为`swagger.json`。
+参考官方swagger标准格式https://petstore.swagger.io/v2/swagger.json
+如果swagger的标准格式不对，需要先转换为标准格式
+再将你要使用的json复制到本地文件，或者修改generate-script中的地址
 
 ### 生成API代码
 
@@ -111,7 +114,6 @@ try {
 - 确保您的Swagger文件格式正确且符合OpenAPI 3.0.x规范
 - 生成代码前请备份已有文件，避免覆盖重要修改
 - 可以根据项目需求自定义`base.service.ts`中的请求逻辑
-- base.services.ts为自行封装base接口，需自行修改替换自己的base或者直接微调案例中的代码即可使用
 - 再此特别鸣谢裴工的技术支持！
 
 
