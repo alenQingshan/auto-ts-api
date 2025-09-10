@@ -1,0 +1,15 @@
+# Windows
+Thumbs.db
+$RECYCLE.BIN/
+.DS_Store
+
+# macOS
+.DS_Store
+.fseventsd
+.Spotlight-V100
+.TemporaryItems
+.Trashes
+
+unpackage
+
+node_modules

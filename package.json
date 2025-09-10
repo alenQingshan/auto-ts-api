@@ -1,0 +1,11 @@
+{
+  "scripts": {
+    "generate:api": "node generate-from-swagger.js",
+    "generate:api:watch": "nodemon generate-from-swagger.js"
+  },
+  "devDependencies": {
+    "fs-extra": "^11.3.1",
+    "nodemon": "^3.0.1",
+    "swagger-parser": "^10.0.3"
+  }
+}
