@@ -211,11 +211,8 @@ ${paramComments}   * @param data ${requestBodyType}
     for (const param of params) {
       url = url.replace(`{${param}}`, `\${${param}}`);
     }
-    // 根据 swagger.json 中的 basePath 调整 URL 生成
-    if (url.startsWith('/')) {
-      return `/api${url}`;
-    }
-    return `/api/${url}`;
+    // 直接返回处理后的路径，不再添加额外的/api前缀
+    return url;
   }
 
   getMethodName(operationId) {
