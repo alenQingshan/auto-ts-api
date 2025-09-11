@@ -10,6 +10,10 @@
 
 **auto-ts-api** 是一个高效的API代码生成工具，能够自动从Swagger/OpenAPI JSON文件中生成TypeScript接口代码，为前端开发者提供类型安全的API调用体验。
 
+[github项目地址](https://github.com/alenQingshan/auto-ts-api)
+
+[gitee项目地址](https://gitee.com/alenliuqingshan/auto-ts-api)
+
 ### ✨ 主要功能
 - 自动解析Swagger/OpenAPI 3.0.x规范的JSON文件
 - 生成TypeScript接口定义（Models）
