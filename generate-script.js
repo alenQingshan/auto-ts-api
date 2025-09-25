@@ -1,6 +1,6 @@
 const fs = require('fs-extra');
 const path = require('path');
-const swaggerParser = require('swagger-parser');
+const SwaggerParser = require('@apidevtools/swagger-parser');
 
 class SwaggerToTsGenerator {
   constructor(swaggerPath, outputDir) {
@@ -11,7 +11,7 @@ class SwaggerToTsGenerator {
 
   async generate() {
     try {
-      this.api = await swaggerParser.parse(this.swaggerPath);
+      this.api = await SwaggerParser.parse(this.swaggerPath);
       await this.ensureOutputDirs();
       
       // 生成所有模型
@@ -43,12 +43,18 @@ class SwaggerToTsGenerator {
     if (!schemas) return;
 
     for (const [modelName, schema] of Object.entries(schemas)) {
-      const interfaceCode = this.generateInterface(modelName, schema);
-      const fileName = `${this.toKebabCase(modelName)}.model.ts`;
-      const filePath = path.join(this.outputDir, 'models', fileName);
-      
-      await fs.writeFile(filePath, interfaceCode);
-      console.log(`生成模型: ${fileName}`);
+        // 简化复杂的schema名称
+        const simplifiedModelName = this.simplifySchemaName(modelName);
+        
+        // 修改schema中的$ref引用
+        const updatedSchema = JSON.parse(JSON.stringify(schema));
+        
+        const interfaceCode = this.generateInterface(simplifiedModelName, updatedSchema);
+        const fileName = `${this.toCleanFileName(simplifiedModelName)}.model.ts`;
+        const filePath = path.join(this.outputDir, 'models', fileName);
+        
+        await fs.writeFile(filePath, interfaceCode);
+        console.log(`生成模型: ${fileName}`);
     }
   }
 
@@ -69,7 +75,7 @@ class SwaggerToTsGenerator {
   async generateServiceForTag(tagName) {
     const serviceName = `${this.toPascalCase(tagName)}Service`;
     const serviceCode = this.generateServiceCode(serviceName, tagName);
-    const fileName = `${this.toKebabCase(tagName)}.service.ts`;
+    const fileName = `${this.toCleanFileName(tagName)}.service.ts`;
     const filePath = path.join(this.outputDir, 'services', fileName);
     
     await fs.writeFile(filePath, serviceCode);
@@ -79,6 +85,8 @@ class SwaggerToTsGenerator {
   generateInterface(modelName, schema) {
     let propertiesCode = '';
     const imports = new Set();
+    // 使用清理后的名称作为接口名
+    const cleanInterfaceName = this.toCleanFileName(modelName);
     
     if (schema.properties) {
       for (const [propName, propSchema] of Object.entries(schema.properties)) {
@@ -89,7 +97,7 @@ class SwaggerToTsGenerator {
         if (type !== 'string' && type !== 'number' && type !== 'boolean' && type !== 'any' && !type.includes('[]')) {
           // 避免导入自身
           if (type !== modelName) {
-            imports.add(`import { ${type} } from './${this.toKebabCase(type)}.model';`);
+            imports.add(`import { ${type} } from './${this.toCleanFileName(type)}.model';`);
           }
         }
         
@@ -98,7 +106,7 @@ class SwaggerToTsGenerator {
           const elementType = type.replace('[]', '');
           if (elementType !== 'string' && elementType !== 'number' && elementType !== 'boolean' && elementType !== 'any') {
             if (elementType !== modelName) {
-              imports.add(`import { ${elementType} } from './${this.toKebabCase(elementType)}.model';`);
+              imports.add(`import { ${elementType} } from './${this.toCleanFileName(elementType)}.model';`);
             }
           }
         }
@@ -116,7 +124,7 @@ class SwaggerToTsGenerator {
     // 生成导入语句
     const importStatements = imports.size > 0 ? Array.from(imports).join('\n') + '\n\n' : '';
 
-    return `${importStatements}export interface ${modelName} {
+    return `${importStatements}export interface ${cleanInterfaceName} {
 ${propertiesCode}}`;
   }
 
@@ -261,12 +269,12 @@ ${paramComments}   * @param data ${requestBodyType}
       
       // 处理请求体类型
       if (requestBodyType !== 'any' && !requestBodyType.includes('[]')) {
-        imports.add(`import { ${requestBodyType} } from '../models/${this.toKebabCase(requestBodyType)}.model';`);
+        imports.add(`import { ${requestBodyType} } from '../models/${this.toCleanFileName(requestBodyType)}.model';`);
       }
       
       // 处理返回类型，跳过数组类型的导入
       if (returnType !== 'any' && !returnType.includes('[]')) {
-        imports.add(`import { ${returnType} } from '../models/${this.toKebabCase(returnType)}.model';`);
+        imports.add(`import { ${returnType} } from '../models/${this.toCleanFileName(returnType)}.model';`);
       }
     }
     
@@ -275,7 +283,10 @@ ${paramComments}   * @param data ${requestBodyType}
 
   getTypescriptType(schema) {
     if (schema.$ref) {
-      return schema.$ref.split('/').pop();
+      const refName = schema.$ref.split('/').pop();
+      // 先简化名称，再清理特殊字符
+      const simplifiedName = this.simplifySchemaName(refName);
+      return this.toCleanFileName(simplifiedName);
     }
     
     switch (schema.type) {
@@ -292,6 +303,38 @@ ${paramComments}   * @param data ${requestBodyType}
 
   toKebabCase(str) {
     return str.replace(/([a-z])([A-Z])/g, '$1-$2').toLowerCase();
+  }
+
+  // 生成没有点号、中划线、下划线(末尾)和其他特殊字符的合法文件名
+  toCleanFileName(str) {
+    // 替换所有点号、中划线为空白
+    let cleanStr = str.replace(/[.-]/g, '');
+    // 移除所有非字母数字字符（除了下划线）
+    cleanStr = cleanStr.replace(/[^a-zA-Z0-9_]/g, '');
+    // 移除文件名末尾的下划线
+    cleanStr = cleanStr.replace(/_+$/, '');
+    return cleanStr;
+  }
+
+  // 简化复杂的schema名称
+  simplifySchemaName(str) {
+    // 处理ResponseSchema_List_app.schemas.tenant_schema.CoreTenantRead__这样的名称
+    if (str.startsWith('ResponseSchema_') && str.includes('List_')) {
+      const match = str.match(/_List_.+_(\w+)__$/);
+      if (match && match[1]) {
+        return `ResponseSchemaList${this.toPascalCase(match[1])}`;
+      }
+    }
+    // 处理其他ResponseSchema_开头的名称
+    if (str.startsWith('ResponseSchema_')) {
+      const parts = str.split('_');
+      if (parts.length > 1) {
+        // 移除ResponseSchema_前缀，并将剩余部分转换为驼峰命名
+        const rest = parts.slice(1).join('_');
+        return `ResponseSchema${this.toPascalCase(rest)}`;
+      }
+    }
+    return str;
   }
 
   toCamelCase(str) {

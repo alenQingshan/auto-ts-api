@@ -1,4 +1,4 @@
-import { ValidationError } from './validation-error.model';
+import { ValidationError } from './ValidationError.model';
 
 export interface HTTPValidationError {
   /**

@@ -1,8 +1,8 @@
 export interface LoginRequest {
   /**
-   * email
+   * account
    */
-  email: string | null;
+  account: string | null;
   /**
    * password
    */

@@ -9,13 +9,12 @@
 ## 📋 项目介绍
 
 **auto-ts-api** 是一个高效的API代码生成工具，能够自动从Swagger/OpenAPI JSON文件中生成TypeScript接口代码，为前端开发者提供类型安全的API调用体验。
-
 [github项目地址](https://github.com/alenQingshan/auto-ts-api)
 
 [gitee项目地址](https://gitee.com/alenliuqingshan/auto-ts-api)
 
 ### ✨ 主要功能
-- 自动解析Swagger/OpenAPI 3.0.x规范的JSON文件
+- 自动解析Swagger/OpenAPI 3.1.x规范的JSON文件
 - 生成TypeScript接口定义（Models）
 - 生成类型安全的API服务类（Services）
 - 支持自定义扩展配置
@@ -103,7 +102,7 @@ try {
 
 ### 调整Swagger版本
 
-当前支持的Swagger/OpenAPI版本为3.0.x。如果您的Swagger文件版本为3.1.0，请先将其降级为3.0.3版本以确保兼容性。
+当前支持的Swagger/OpenAPI版本为3.1.x。如果您的Swagger文件版本有问题可直接手动修改generate-script.js中的swagger版本号。
 
 ## 🤝 贡献指南
 
@@ -115,7 +114,7 @@ try {
 
 ## 📝 注意事项
 
-- 确保您的Swagger文件格式正确且符合OpenAPI 3.0.x规范
+- 确保您的Swagger文件格式正确且符合OpenAPI 3.1.x规范
 - 生成代码前请备份已有文件，避免覆盖重要修改
 - 可以根据项目需求自定义`base.service.ts`中的请求逻辑
 - 再此特别鸣谢裴工的技术支持！
