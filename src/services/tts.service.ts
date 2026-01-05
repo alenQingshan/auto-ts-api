@@ -1,9 +1,9 @@
 import { BaseService, ExtOptions } from './base.service';
-import { TTSVoiceCreate } from '../models/TTSVoiceCreate.model';
-import { TTSVoiceUpdate } from '../models/TTSVoiceUpdate.model';
-import { TTSVoiceStatusUpdate } from '../models/TTSVoiceStatusUpdate.model';
-import { TenantVoiceAssignAction } from '../models/TenantVoiceAssignAction.model';
-import { ResponseSchema } from '../models/ResponseSchema.model';
+import { TTSVoiceCreate } from '../models/TTS/TTSVoiceCreate.model';
+import { TTSVoiceUpdate } from '../models/TTS/TTSVoiceUpdate.model';
+import { TTSVoiceStatusUpdate } from '../models/TTS/TTSVoiceStatusUpdate.model';
+import { TenantVoiceAssignAction } from '../models/TTS/TenantVoiceAssignAction.model';
+import { ResponseSchema } from '../models/auth/ResponseSchema.model';
 
 class TTSService extends BaseService {
   constructor() {
@@ -15,7 +15,7 @@ class TTSService extends BaseService {
    * @param data any
    */
   getTtsVoices(data: any, extOptions?: ExtOptions): Promise<any> {
-    const url = `/api/v1/voices`;
+    const url = `/api/v1/tts/voices`;
     return this.request<any>('get', url, data, extOptions);
   }
 
@@ -24,8 +24,17 @@ class TTSService extends BaseService {
    * @param data TTSVoiceCreate
    */
   createTtsVoice(data: TTSVoiceCreate, extOptions?: ExtOptions): Promise<any> {
-    const url = `/api/v1/voices`;
+    const url = `/api/v1/tts/voices`;
     return this.request<any>('post', url, data, extOptions);
+  }
+
+  /**
+   * Get Tts Options
+   * @param data any
+   */
+  getTtsOptions(data: any, extOptions?: ExtOptions): Promise<any> {
+    const url = `/api/v1/tts/options`;
+    return this.request<any>('get', url, data, extOptions);
   }
 
   /**
@@ -34,7 +43,7 @@ class TTSService extends BaseService {
    * @param data any
    */
   getTtsVoiceById(voice_id: string | number, data: any, extOptions?: ExtOptions): Promise<any> {
-    const url = `/api/v1/voices/${voice_id}`;
+    const url = `/api/v1/tts/voices/${voice_id}`;
     return this.request<any>('get', url, data, extOptions);
   }
 
@@ -44,7 +53,7 @@ class TTSService extends BaseService {
    * @param data TTSVoiceUpdate
    */
   updateTtsVoice(voice_id: string | number, data: TTSVoiceUpdate, extOptions?: ExtOptions): Promise<any> {
-    const url = `/api/v1/voices/${voice_id}`;
+    const url = `/api/v1/tts/voices/${voice_id}`;
     return this.request<any>('put', url, data, extOptions);
   }
 
@@ -54,7 +63,7 @@ class TTSService extends BaseService {
    * @param data any
    */
   deleteTtsVoice(voice_id: string | number, data: any, extOptions?: ExtOptions): Promise<any> {
-    const url = `/api/v1/voices/${voice_id}`;
+    const url = `/api/v1/tts/voices/${voice_id}`;
     return this.request<any>('delete', url, data, extOptions);
   }
 
@@ -64,7 +73,7 @@ class TTSService extends BaseService {
    * @param data TTSVoiceStatusUpdate
    */
   updateTtsVoiceStatus(voice_id: string | number, data: TTSVoiceStatusUpdate, extOptions?: ExtOptions): Promise<any> {
-    const url = `/api/v1/voices/${voice_id}/status`;
+    const url = `/api/v1/tts/voices/${voice_id}/status`;
     return this.request<any>('patch', url, data, extOptions);
   }
 
@@ -73,7 +82,7 @@ class TTSService extends BaseService {
    * @param data any
    */
   getTenantVoices(data: any, extOptions?: ExtOptions): Promise<any> {
-    const url = `/api/v1/tenant-voices`;
+    const url = `/api/v1/tts/tenant-voices`;
     return this.request<any>('get', url, data, extOptions);
   }
 
@@ -84,7 +93,7 @@ class TTSService extends BaseService {
    * @param data TenantVoiceAssignAction
    */
   manageTenantVoiceAssignment(tenant_id: string | number, voice_id: string | number, data: TenantVoiceAssignAction, extOptions?: ExtOptions): Promise<ResponseSchema> {
-    const url = `/api/v1/api/v1/tenant/${tenant_id}/voices/${voice_id}`;
+    const url = `/api/v1/tts/tenant/${tenant_id}/voices/${voice_id}`;
     return this.request<ResponseSchema>('patch', url, data, extOptions);
   }
 

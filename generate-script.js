@@ -11,8 +11,14 @@ class SwaggerToTsGenerator {
 
   async generate() {
     try {
+      // 清空输出目录
+      await this.cleanOutputDirs();
+      
       this.api = await SwaggerParser.parse(this.swaggerPath);
       await this.ensureOutputDirs();
+      
+      // 分析 schema 到 tag 的映射关系
+      this.analyzeSchemaToTagMapping();
       
       // 生成所有模型
       await this.generateModels();
@@ -20,9 +26,39 @@ class SwaggerToTsGenerator {
       // 生成所有服务
       await this.generateServices();
       
+      // 复制 base.service.ts 到 services 目录
+      await this.copyBaseService();
+      
       console.log('生成完成！');
     } catch (error) {
       console.error('生成错误:', error);
+    }
+  }
+
+  async cleanOutputDirs() {
+    const dirs = [
+      path.join(this.outputDir, 'models'),
+      path.join(this.outputDir, 'services')
+    ];
+    
+    for (const dir of dirs) {
+      if (await fs.pathExists(dir)) {
+        // 清空目录及其所有子目录
+        await fs.emptyDir(dir);
+        console.log(`已清空目录: ${dir}`);
+      }
+    }
+  }
+
+  async copyBaseService() {
+    const baseServicePath = path.join(process.cwd(), 'base.service.ts');
+    const targetPath = path.join(this.outputDir, 'services', 'base.service.ts');
+    
+    if (await fs.pathExists(baseServicePath)) {
+      await fs.copy(baseServicePath, targetPath);
+      console.log(`已复制 base.service.ts 到 ${targetPath}`);
+    } else {
+      console.warn(`警告: 未找到 base.service.ts 文件 (${baseServicePath})`);
     }
   }
 
@@ -37,25 +73,170 @@ class SwaggerToTsGenerator {
     }
   }
 
+  // 分析 swagger，建立 schema 到 tag 的映射关系
+  analyzeSchemaToTagMapping() {
+    this.schemaToTagMap = {}; // schema名称 -> tag名称
+    this.tagToSchemasMap = {}; // tag名称 -> [schema名称列表]
+    
+    if (!this.api.paths) return;
+    
+    // 遍历所有路径，找出每个 tag 使用的 schemas
+    for (const [routePath, pathMethods] of Object.entries(this.api.paths)) {
+      for (const [httpMethod, operation] of Object.entries(pathMethods)) {
+        if (!operation.tags || !Array.isArray(operation.tags)) continue;
+        
+        const tags = operation.tags;
+        const schemas = new Set();
+        
+        // 收集请求体中的 schema
+        if (operation.requestBody && operation.requestBody.content) {
+          const content = operation.requestBody.content;
+          for (const contentType of Object.values(content)) {
+            if (contentType.schema) {
+              this.extractSchemaRefs(contentType.schema, schemas);
+            }
+          }
+        } else if (operation.parameters) {
+          for (const param of operation.parameters) {
+            if (param.schema) {
+              this.extractSchemaRefs(param.schema, schemas);
+            }
+          }
+        }
+        
+        // 收集响应中的 schema
+        if (operation.responses) {
+          for (const response of Object.values(operation.responses)) {
+            if (response.content) {
+              for (const contentType of Object.values(response.content)) {
+                if (contentType.schema) {
+                  this.extractSchemaRefs(contentType.schema, schemas);
+                }
+              }
+            } else if (response.schema) {
+              this.extractSchemaRefs(response.schema, schemas);
+            }
+          }
+        }
+        
+        // 将 schema 关联到对应的 tag
+        for (const tag of tags) {
+          if (!this.tagToSchemasMap[tag]) {
+            this.tagToSchemasMap[tag] = new Set();
+          }
+          for (const schemaName of schemas) {
+            const simplifiedName = this.simplifySchemaName(schemaName);
+            const cleanName = this.toCleanFileName(simplifiedName);
+            this.tagToSchemasMap[tag].add(cleanName);
+            
+            // 如果 schema 还没有关联到 tag，或者当前 tag 更具体，则更新映射
+            if (!this.schemaToTagMap[cleanName] || this.isMoreSpecificTag(tag, this.schemaToTagMap[cleanName])) {
+              this.schemaToTagMap[cleanName] = tag;
+            }
+          }
+        }
+      }
+    }
+  }
+
+  // 从 schema 中提取所有引用的 schema 名称
+  extractSchemaRefs(schema, schemas) {
+    if (schema.$ref) {
+      const refName = schema.$ref.split('/').pop();
+      const simplifiedName = this.simplifySchemaName(refName);
+      const cleanName = this.toCleanFileName(simplifiedName);
+      schemas.add(cleanName);
+    } else if (schema.items) {
+      this.extractSchemaRefs(schema.items, schemas);
+    } else if (schema.properties) {
+      for (const propSchema of Object.values(schema.properties)) {
+        this.extractSchemaRefs(propSchema, schemas);
+      }
+    } else if (schema.anyOf || schema.oneOf || schema.allOf) {
+      const schemasToCheck = schema.anyOf || schema.oneOf || schema.allOf;
+      for (const subSchema of schemasToCheck) {
+        this.extractSchemaRefs(subSchema, schemas);
+      }
+    }
+  }
+
+  // 判断 tag1 是否比 tag2 更具体（用于选择更合适的分类）
+  isMoreSpecificTag(tag1, tag2) {
+    // 如果 tag1 包含 tag2，说明 tag1 更具体
+    return tag1.includes(tag2) && tag1 !== tag2;
+  }
+
+  // 根据 schema 名称获取对应的 tag（用于分类）
+  getTagForSchema(schemaName) {
+    if (!this.schemaToTagMap) return null;
+    const cleanName = this.toCleanFileName(this.simplifySchemaName(schemaName));
+    return this.schemaToTagMap[cleanName] || null;
+  }
+
+  // 将 tag 名称转换为文件夹名称
+  tagToFolderName(tag) {
+    return tag.replace(/-/g, '_');
+  }
+
   async generateModels() {
     // 兼容 Swagger 2.0 和 OpenAPI 3.0
     const schemas = this.api.definitions || (this.api.components && this.api.components.schemas);
     if (!schemas) return;
 
+    // 存储每个 tag 文件夹需要创建的目录
+    const tagFolders = new Set();
+
     for (const [modelName, schema] of Object.entries(schemas)) {
         // 简化复杂的schema名称
         const simplifiedModelName = this.simplifySchemaName(modelName);
+        const cleanModelName = this.toCleanFileName(simplifiedModelName);
+        
+        // 根据映射关系获取 tag，如果没有则根据名称推断
+        let tag = this.getTagForSchema(modelName);
+        if (!tag) {
+          // 如果没找到映射，尝试根据名称推断
+          tag = this.inferTagFromName(cleanModelName);
+        }
+        
+        const folderName = this.tagToFolderName(tag);
+        tagFolders.add(folderName);
+        
+        // 确保文件夹存在
+        const folderPath = path.join(this.outputDir, 'models', folderName);
+        await fs.ensureDir(folderPath);
         
         // 修改schema中的$ref引用
         const updatedSchema = JSON.parse(JSON.stringify(schema));
         
-        const interfaceCode = this.generateInterface(simplifiedModelName, updatedSchema);
-        const fileName = `${this.toCleanFileName(simplifiedModelName)}.model.ts`;
-        const filePath = path.join(this.outputDir, 'models', fileName);
+        const interfaceCode = this.generateInterface(simplifiedModelName, updatedSchema, folderName);
+        const fileName = `${cleanModelName}.model.ts`;
+        const filePath = path.join(folderPath, fileName);
         
         await fs.writeFile(filePath, interfaceCode);
-        console.log(`生成模型: ${fileName}`);
+        console.log(`生成模型: ${folderName}/${fileName}`);
     }
+  }
+
+  // 根据 schema 名称推断 tag（当没有找到映射时使用）
+  inferTagFromName(schemaName) {
+    const name = schemaName.toLowerCase();
+    
+    if (name.startsWith('core')) return 'users'; // CoreUser, CoreRole 等
+    if (name.startsWith('cultural')) return 'cultural_products';
+    if (name.startsWith('lib')) return 'library_books';
+    if (name.startsWith('news')) return 'news_articles';
+    if (name.startsWith('veg')) return 'veg_articles';
+    if (name.startsWith('email')) return 'email_templates';
+    if (name.startsWith('sms')) return 'sms_templates';
+    if (name.startsWith('automation')) return 'automation';
+    if (name.startsWith('conf') || name.startsWith('config')) return 'config_region';
+    if (name.startsWith('datadict')) return 'config_data_dict';
+    if (name.startsWith('security')) return 'security';
+    if (name.startsWith('sensitiveword')) return 'config_sensitive_word';
+    if (name.startsWith('tts')) return 'TTS';
+    if (name.startsWith('aichat')) return 'AI-chat';
+    
+    return 'common';
   }
 
   async generateServices() {
@@ -82,7 +263,7 @@ class SwaggerToTsGenerator {
     console.log(`生成服务: ${fileName}`);
   }
 
-  generateInterface(modelName, schema) {
+  generateInterface(modelName, schema, currentFolder) {
     let propertiesCode = '';
     const imports = new Set();
     // 使用清理后的名称作为接口名
@@ -96,8 +277,11 @@ class SwaggerToTsGenerator {
         // 检查类型是否是对其他模型的引用
         if (type !== 'string' && type !== 'number' && type !== 'boolean' && type !== 'any' && !type.includes('[]')) {
           // 避免导入自身
-          if (type !== modelName) {
-            imports.add(`import { ${type} } from './${this.toCleanFileName(type)}.model';`);
+          if (type !== cleanInterfaceName) {
+            const targetFolder = this.getTagForSchema(type) || this.inferTagFromName(type);
+            const targetFolderName = this.tagToFolderName(targetFolder);
+            const importPath = this.getModelImportPath(currentFolder, targetFolderName, type);
+            imports.add(`import { ${type} } from '${importPath}';`);
           }
         }
         
@@ -105,8 +289,11 @@ class SwaggerToTsGenerator {
         if (type.includes('[]')) {
           const elementType = type.replace('[]', '');
           if (elementType !== 'string' && elementType !== 'number' && elementType !== 'boolean' && elementType !== 'any') {
-            if (elementType !== modelName) {
-              imports.add(`import { ${elementType} } from './${this.toCleanFileName(elementType)}.model';`);
+            if (elementType !== cleanInterfaceName) {
+              const targetFolder = this.getTagForSchema(elementType) || this.inferTagFromName(elementType);
+              const targetFolderName = this.tagToFolderName(targetFolder);
+              const importPath = this.getModelImportPath(currentFolder, targetFolderName, elementType);
+              imports.add(`import { ${elementType} } from '${importPath}';`);
             }
           }
         }
@@ -126,6 +313,17 @@ class SwaggerToTsGenerator {
 
     return `${importStatements}export interface ${cleanInterfaceName} {
 ${propertiesCode}}`;
+  }
+
+  // 获取模型导入路径（从当前文件夹导入目标文件夹的模型）
+  getModelImportPath(currentFolder, targetFolder, modelName) {
+    if (currentFolder === targetFolder) {
+      // 同一文件夹，使用相对路径
+      return `./${this.toCleanFileName(modelName)}.model`;
+    } else {
+      // 不同文件夹，需要回到 models 目录再进入目标文件夹
+      return `../${targetFolder}/${this.toCleanFileName(modelName)}.model`;
+    }
   }
 
   generateServiceCode(serviceName, tagName) {
@@ -269,12 +467,16 @@ ${paramComments}   * @param data ${requestBodyType}
       
       // 处理请求体类型
       if (requestBodyType !== 'any' && !requestBodyType.includes('[]')) {
-        imports.add(`import { ${requestBodyType} } from '../models/${this.toCleanFileName(requestBodyType)}.model';`);
+        const targetFolder = this.getTagForSchema(requestBodyType) || this.inferTagFromName(requestBodyType);
+        const targetFolderName = this.tagToFolderName(targetFolder);
+        imports.add(`import { ${requestBodyType} } from '../models/${targetFolderName}/${this.toCleanFileName(requestBodyType)}.model';`);
       }
       
       // 处理返回类型，跳过数组类型的导入
       if (returnType !== 'any' && !returnType.includes('[]')) {
-        imports.add(`import { ${returnType} } from '../models/${this.toCleanFileName(returnType)}.model';`);
+        const targetFolder = this.getTagForSchema(returnType) || this.inferTagFromName(returnType);
+        const targetFolderName = this.tagToFolderName(targetFolder);
+        imports.add(`import { ${returnType} } from '../models/${targetFolderName}/${this.toCleanFileName(returnType)}.model';`);
       }
     }
     
@@ -344,6 +546,13 @@ ${paramComments}   * @param data ${requestBodyType}
   }
 
   toPascalCase(str) {
+    // 特殊处理带有下划线的字符串，如email_channels
+    if (str.includes('_')) {
+      return str.split('_').map(part => 
+        part.charAt(0).toUpperCase() + part.slice(1).toLowerCase()
+      ).join('');
+    }
+    // 对于没有下划线的字符串，使用原来的逻辑
     const camelCase = this.toCamelCase(str);
     return camelCase.charAt(0).toUpperCase() + camelCase.slice(1);
   }

@@ -1,8 +1,8 @@
 import { BaseService, ExtOptions } from './base.service';
-import { CorePermissionCreate } from '../models/CorePermissionCreate.model';
-import { CorePermissionUpdate } from '../models/CorePermissionUpdate.model';
-import { ResponseSchema } from '../models/ResponseSchema.model';
-import { PermissionStatusUpdate } from '../models/PermissionStatusUpdate.model';
+import { CorePermissionCreate } from '../models/permissions/CorePermissionCreate.model';
+import { CorePermissionUpdate } from '../models/permissions/CorePermissionUpdate.model';
+import { ResponseSchema } from '../models/auth/ResponseSchema.model';
+import { PermissionStatusUpdate } from '../models/permissions/PermissionStatusUpdate.model';
 
 class PermissionsService extends BaseService {
   constructor() {
@@ -14,7 +14,7 @@ class PermissionsService extends BaseService {
    * @param data any
    */
   getAllPermissions(data: any, extOptions?: ExtOptions): Promise<any> {
-    const url = `/api/v1/permissions`;
+    const url = `/api/core/permissions`;
     return this.request<any>('get', url, data, extOptions);
   }
 
@@ -23,7 +23,7 @@ class PermissionsService extends BaseService {
    * @param data CorePermissionCreate
    */
   createPermission(data: CorePermissionCreate, extOptions?: ExtOptions): Promise<any> {
-    const url = `/api/v1/permissions`;
+    const url = `/api/core/permissions`;
     return this.request<any>('post', url, data, extOptions);
   }
 
@@ -33,7 +33,7 @@ class PermissionsService extends BaseService {
    * @param data any
    */
   getPermissionById(perm_id: string | number, data: any, extOptions?: ExtOptions): Promise<any> {
-    const url = `/api/v1/permissions/${perm_id}`;
+    const url = `/api/core/permissions/${perm_id}`;
     return this.request<any>('get', url, data, extOptions);
   }
 
@@ -43,7 +43,7 @@ class PermissionsService extends BaseService {
    * @param data CorePermissionUpdate
    */
   updatePermission(perm_id: string | number, data: CorePermissionUpdate, extOptions?: ExtOptions): Promise<any> {
-    const url = `/api/v1/permissions/${perm_id}`;
+    const url = `/api/core/permissions/${perm_id}`;
     return this.request<any>('put', url, data, extOptions);
   }
 
@@ -53,7 +53,7 @@ class PermissionsService extends BaseService {
    * @param data any
    */
   deletePermission(perm_id: string | number, data: any, extOptions?: ExtOptions): Promise<ResponseSchema> {
-    const url = `/api/v1/permissions/${perm_id}`;
+    const url = `/api/core/permissions/${perm_id}`;
     return this.request<ResponseSchema>('delete', url, data, extOptions);
   }
 
@@ -63,7 +63,7 @@ class PermissionsService extends BaseService {
    * @param data PermissionStatusUpdate
    */
   updatePermissionStatus(perm_id: string | number, data: PermissionStatusUpdate, extOptions?: ExtOptions): Promise<any> {
-    const url = `/api/v1/permissions/${perm_id}/status`;
+    const url = `/api/core/permissions/${perm_id}/status`;
     return this.request<any>('patch', url, data, extOptions);
   }
 

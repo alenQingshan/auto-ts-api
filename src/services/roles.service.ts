@@ -1,9 +1,9 @@
 import { BaseService, ExtOptions } from './base.service';
-import { CoreRoleCreate } from '../models/CoreRoleCreate.model';
-import { CoreRoleUpdate } from '../models/CoreRoleUpdate.model';
-import { ResponseSchema } from '../models/ResponseSchema.model';
-import { RoleStatusUpdate } from '../models/RoleStatusUpdate.model';
-import { RolePermissionsSave } from '../models/RolePermissionsSave.model';
+import { CoreRoleCreate } from '../models/roles/CoreRoleCreate.model';
+import { CoreRoleUpdate } from '../models/roles/CoreRoleUpdate.model';
+import { ResponseSchema } from '../models/auth/ResponseSchema.model';
+import { RoleStatusUpdate } from '../models/roles/RoleStatusUpdate.model';
+import { RolePermissionsSave } from '../models/roles/RolePermissionsSave.model';
 
 class RolesService extends BaseService {
   constructor() {
@@ -15,7 +15,7 @@ class RolesService extends BaseService {
    * @param data any
    */
   getAllRoles(data: any, extOptions?: ExtOptions): Promise<any> {
-    const url = `/api/v1/roles`;
+    const url = `/api/core/roles`;
     return this.request<any>('get', url, data, extOptions);
   }
 
@@ -24,7 +24,7 @@ class RolesService extends BaseService {
    * @param data CoreRoleCreate
    */
   createRole(data: CoreRoleCreate, extOptions?: ExtOptions): Promise<any> {
-    const url = `/api/v1/roles`;
+    const url = `/api/core/roles`;
     return this.request<any>('post', url, data, extOptions);
   }
 
@@ -34,7 +34,7 @@ class RolesService extends BaseService {
    * @param data any
    */
   getRoleById(role_id: string | number, data: any, extOptions?: ExtOptions): Promise<any> {
-    const url = `/api/v1/roles/${role_id}`;
+    const url = `/api/core/roles/${role_id}`;
     return this.request<any>('get', url, data, extOptions);
   }
 
@@ -44,7 +44,7 @@ class RolesService extends BaseService {
    * @param data CoreRoleUpdate
    */
   updateRole(role_id: string | number, data: CoreRoleUpdate, extOptions?: ExtOptions): Promise<any> {
-    const url = `/api/v1/roles/${role_id}`;
+    const url = `/api/core/roles/${role_id}`;
     return this.request<any>('put', url, data, extOptions);
   }
 
@@ -54,7 +54,7 @@ class RolesService extends BaseService {
    * @param data any
    */
   deleteRole(role_id: string | number, data: any, extOptions?: ExtOptions): Promise<ResponseSchema> {
-    const url = `/api/v1/roles/${role_id}`;
+    const url = `/api/core/roles/${role_id}`;
     return this.request<ResponseSchema>('delete', url, data, extOptions);
   }
 
@@ -64,7 +64,7 @@ class RolesService extends BaseService {
    * @param data RoleStatusUpdate
    */
   updateRoleStatus(role_id: string | number, data: RoleStatusUpdate, extOptions?: ExtOptions): Promise<any> {
-    const url = `/api/v1/roles/${role_id}/status`;
+    const url = `/api/core/roles/${role_id}/status`;
     return this.request<any>('patch', url, data, extOptions);
   }
 
@@ -74,7 +74,7 @@ class RolesService extends BaseService {
    * @param data RolePermissionsSave
    */
   saveRolePermissions(role_id: string | number, data: RolePermissionsSave, extOptions?: ExtOptions): Promise<ResponseSchema> {
-    const url = `/api/v1/roles/${role_id}/permissions`;
+    const url = `/api/core/roles/${role_id}/permissions`;
     return this.request<ResponseSchema>('post', url, data, extOptions);
   }
 
@@ -84,7 +84,16 @@ class RolesService extends BaseService {
    * @param data any
    */
   getRolePermissionsTree(role_id: string | number, data: any, extOptions?: ExtOptions): Promise<any> {
-    const url = `/api/v1/roles/${role_id}/permissions`;
+    const url = `/api/core/roles/${role_id}/permissions`;
+    return this.request<any>('get', url, data, extOptions);
+  }
+
+  /**
+   * Get Roles Options
+   * @param data any
+   */
+  getRolesOptions(data: any, extOptions?: ExtOptions): Promise<any> {
+    const url = `/api/core/role/options`;
     return this.request<any>('get', url, data, extOptions);
   }
 

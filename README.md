@@ -45,6 +45,15 @@ node generate-script.js
 
 生成的代码将会保存在`src/models`和`src/services`目录下。
 
+### 访问Swagger UI
+
+运行以下命令启动本地Swagger UI服务器：
+```bash
+node swagger-server.js
+```
+
+在浏览器中打开`http://localhost:3000`，即可查看并测试您的API。
+
 ## 📁 项目结构
 
 ```
