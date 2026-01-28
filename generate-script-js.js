@@ -29,6 +29,15 @@ class SwaggerToJsGenerator {
       // 复制 base.service.js 到 services 目录
       await this.copyBaseService();
       
+      // 生成 API 配置文件
+      await this.generateApiConfig();
+      
+      // 生成请求工具文件
+      await this.generateRequestUtils();
+      
+      // 生成入口文件
+      await this.generateIndexFile();
+      
       console.log('JS 版本生成完成！');
     } catch (error) {
       console.error('生成错误:', error);
@@ -38,7 +47,9 @@ class SwaggerToJsGenerator {
   async cleanOutputDirs() {
     const dirs = [
       path.join(this.outputDir, 'models'),
-      path.join(this.outputDir, 'services')
+      path.join(this.outputDir, 'services'),
+      path.join(this.outputDir, 'api'),
+      path.join(this.outputDir, 'request')
     ];
     
     for (const dir of dirs) {
@@ -65,7 +76,9 @@ class SwaggerToJsGenerator {
   async ensureOutputDirs() {
     const dirs = [
       path.join(this.outputDir, 'models'),
-      path.join(this.outputDir, 'services')
+      path.join(this.outputDir, 'services'),
+      path.join(this.outputDir, 'api'),
+      path.join(this.outputDir, 'request')
     ];
     
     for (const dir of dirs) {
@@ -513,6 +526,309 @@ ${paramDocs}   * @param {${requestBodyType}} data - 请求数据
     }
     const camelCase = this.toCamelCase(str);
     return camelCase.charAt(0).toUpperCase() + camelCase.slice(1);
+  }
+
+  async generateApiConfig() {
+    const apiConfig = `/**
+ * API 配置文件
+ * 自动生成，请勿手动修改
+ */
+
+const API_CONFIG = {
+  baseURL: process.env.API_BASE_URL || 'http://localhost:3000/api/v1',
+  timeout: 30000,
+  headers: {
+    'Content-Type': 'application/json'
+  }
+};
+
+/**
+ * API 端点配置
+ */
+const API_ENDPOINTS = {
+  // 用户相关
+  users: {
+    list: '/users',
+    detail: (id) => \`/users/\${id}\`,
+    create: '/users',
+    update: (id) => \`/users/\${id}\`,
+    delete: (id) => \`/users/\${id}\`
+  },
+  // 产品相关
+  products: {
+    list: '/products',
+    detail: (id) => \`/products/\${id}\`,
+    create: '/products',
+    update: (id) => \`/products/\${id}\`,
+    delete: (id) => \`/products/\${id}\`
+  },
+  // 文件相关
+  files: {
+    upload: '/files/upload',
+    uploadBatch: '/files/upload/batch'
+  }
+};
+
+module.exports = {
+  API_CONFIG,
+  API_ENDPOINTS
+};
+`;
+
+    const filePath = path.join(this.outputDir, 'api', 'config.js');
+    await fs.writeFile(filePath, apiConfig);
+    console.log('已生成 API 配置文件: api/config.js');
+  }
+
+  async generateRequestUtils() {
+    const requestUtils = `const axios = require('axios');
+const { API_CONFIG } = require('../api/config');
+
+/**
+ * 创建 axios 实例
+ */
+const instance = axios.create({
+  baseURL: API_CONFIG.baseURL,
+  timeout: API_CONFIG.timeout,
+  headers: API_CONFIG.headers
+});
+
+/**
+ * 请求拦截器
+ */
+instance.interceptors.request.use(
+  (config) => {
+    // 添加 token
+    if (typeof window !== 'undefined') {
+      const token = localStorage.getItem('token') || sessionStorage.getItem('token');
+      if (token) {
+        config.headers.Authorization = \`Bearer \${token}\`;
+      }
+    }
+    return config;
+  },
+  (error) => {
+    return Promise.reject(error);
+  }
+);
+
+/**
+ * 响应拦截器
+ */
+instance.interceptors.response.use(
+  (response) => {
+    const { data } = response;
+    // 根据实际业务调整
+    if (data.code === 200 || data.code === 201) {
+      return data.data;
+    }
+    return Promise.reject(new Error(data.message || '请求失败'));
+  },
+  (error) => {
+    // 处理错误
+    if (error.response) {
+      const { status } = error.response;
+      switch (status) {
+        case 401:
+          console.error('未授权，请重新登录');
+          break;
+        case 403:
+          console.error('没有权限访问');
+          break;
+        case 404:
+          console.error('请求的资源不存在');
+          break;
+        case 500:
+          console.error('服务器错误');
+          break;
+        default:
+          console.error('请求失败');
+      }
+    }
+    return Promise.reject(error);
+  }
+);
+
+/**
+ * 通用请求方法
+ */
+const request = {
+  /**
+   * GET 请求
+   * @param {string} url - 请求地址
+   * @param {Object} params - 查询参数
+   * @param {Object} config - axios 配置
+   * @returns {Promise}
+   */
+  get(url, params, config) {
+    return instance.get(url, { params, ...config });
+  },
+
+  /**
+   * POST 请求
+   * @param {string} url - 请求地址
+   * @param {Object} data - 请求数据
+   * @param {Object} config - axios 配置
+   * @returns {Promise}
+   */
+  post(url, data, config) {
+    return instance.post(url, data, config);
+  },
+
+  /**
+   * PUT 请求
+   * @param {string} url - 请求地址
+   * @param {Object} data - 请求数据
+   * @param {Object} config - axios 配置
+   * @returns {Promise}
+   */
+  put(url, data, config) {
+    return instance.put(url, data, config);
+  },
+
+  /**
+   * DELETE 请求
+   * @param {string} url - 请求地址
+   * @param {Object} params - 查询参数
+   * @param {Object} config - axios 配置
+   * @returns {Promise}
+   */
+  delete(url, params, config) {
+    return instance.delete(url, { params, ...config });
+  },
+
+  /**
+   * PATCH 请求
+   * @param {string} url - 请求地址
+   * @param {Object} data - 请求数据
+   * @param {Object} config - axios 配置
+   * @returns {Promise}
+   */
+  patch(url, data, config) {
+    return instance.patch(url, data, config);
+  },
+
+  /**
+   * 上传文件
+   * @param {string} url - 上传地址
+   * @param {FormData} formData - 表单数据
+   * @param {Object} config - axios 配置
+   * @returns {Promise}
+   */
+  upload(url, formData, config = {}) {
+    return instance.post(url, formData, {
+      ...config,
+      headers: {
+        'Content-Type': 'multipart/form-data',
+        ...config.headers
+      }
+    });
+  },
+
+  /**
+   * 下载文件
+   * @param {string} url - 下载地址
+   * @param {Object} params - 查询参数
+   * @param {string} filename - 文件名
+   * @returns {Promise}
+   */
+  download(url, params, filename = 'download') {
+    return instance.get(url, {
+      params,
+      responseType: 'blob'
+    }).then((response) => {
+      if (typeof window !== 'undefined') {
+        const blob = new Blob([response]);
+        const link = document.createElement('a');
+        link.href = URL.createObjectURL(blob);
+        link.download = filename;
+        link.click();
+        URL.revokeObjectURL(link.href);
+      }
+      return response;
+    });
+  }
+};
+
+module.exports = request;
+`;
+
+    const filePath = path.join(this.outputDir, 'request', 'index.js');
+    await fs.writeFile(filePath, requestUtils);
+    console.log('已生成请求工具文件: request/index.js');
+  }
+
+  async generateIndexFile() {
+    const indexContent = `/**
+ * 自动生成的 API SDK
+ * 提供一站式的 API 调用解决方案
+ */
+
+// 导出所有服务
+const usersService = require('./services/Users.service');
+const productsService = require('./services/Products.service');
+const filesService = require('./services/Files.service');
+
+// 导出请求工具
+const request = require('./request');
+
+// 导出 API 配置
+const { API_CONFIG, API_ENDPOINTS } = require('./api/config');
+
+// 导出所有模型
+const User = require('./models/Users/User.model');
+const UserCreate = require('./models/Users/UserCreate.model');
+const UserUpdate = require('./models/Users/UserUpdate.model');
+const Product = require('./models/Products/Product.model');
+const ProductCreate = require('./models/Products/ProductCreate.model');
+const ProductUpdate = require('./models/Products/ProductUpdate.model');
+const FileInfo = require('./models/Files/FileInfo.model');
+const Error = require('./models/Users/Error.model');
+
+module.exports = {
+  // 服务
+  usersService,
+  productsService,
+  filesService,
+  
+  // 请求工具
+  request,
+  
+  // API 配置
+  API_CONFIG,
+  API_ENDPOINTS,
+  
+  // 模型
+  User,
+  UserCreate,
+  UserUpdate,
+  Product,
+  ProductCreate,
+  ProductUpdate,
+  FileInfo,
+  Error
+};
+
+/**
+ * 使用示例：
+ * 
+ * // 方式1: 使用服务类（推荐）
+ * const { usersService } = require('./index');
+ * usersService.getUserList({}).then(users => console.log(users));
+ * 
+ * // 方式2: 使用请求工具
+ * const { request, API_ENDPOINTS } = require('./index');
+ * request.get(API_ENDPOINTS.users.list).then(users => console.log(users));
+ * 
+ * // 方式3: 使用模型类
+ * const { UserCreate } = require('./index');
+ * const user = new UserCreate({ username: 'test', email: 'test@example.com' });
+ */
+`;
+
+    const filePath = path.join(this.outputDir, 'index.js');
+    await fs.writeFile(filePath, indexContent);
+    console.log('已生成入口文件: index.js');
   }
 }
 

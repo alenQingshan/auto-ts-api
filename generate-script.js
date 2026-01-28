@@ -29,6 +29,15 @@ class SwaggerToTsGenerator {
       // 复制 base.service.ts 到 services 目录
       await this.copyBaseService();
       
+      // 生成 API 配置文件
+      await this.generateApiConfig();
+      
+      // 生成请求工具文件
+      await this.generateRequestUtils();
+      
+      // 生成入口文件
+      await this.generateIndexFile();
+      
       console.log('生成完成！');
     } catch (error) {
       console.error('生成错误:', error);
@@ -38,7 +47,9 @@ class SwaggerToTsGenerator {
   async cleanOutputDirs() {
     const dirs = [
       path.join(this.outputDir, 'models'),
-      path.join(this.outputDir, 'services')
+      path.join(this.outputDir, 'services'),
+      path.join(this.outputDir, 'api'),
+      path.join(this.outputDir, 'request')
     ];
     
     for (const dir of dirs) {
@@ -65,7 +76,9 @@ class SwaggerToTsGenerator {
   async ensureOutputDirs() {
     const dirs = [
       path.join(this.outputDir, 'models'),
-      path.join(this.outputDir, 'services')
+      path.join(this.outputDir, 'services'),
+      path.join(this.outputDir, 'api'),
+      path.join(this.outputDir, 'request')
     ];
     
     for (const dir of dirs) {
@@ -555,6 +568,247 @@ ${paramComments}   * @param data ${requestBodyType}
     // 对于没有下划线的字符串，使用原来的逻辑
     const camelCase = this.toCamelCase(str);
     return camelCase.charAt(0).toUpperCase() + camelCase.slice(1);
+  }
+
+  async generateApiConfig() {
+    const apiConfig = `/**
+ * API 配置文件
+ * 自动生成，请勿手动修改
+ */
+
+export const API_CONFIG = {
+  baseURL: process.env.VITE_API_BASE_URL || 'http://localhost:3000/api/v1',
+  timeout: 30000,
+  headers: {
+    'Content-Type': 'application/json'
+  }
+};
+
+/**
+ * API 端点配置
+ */
+export const API_ENDPOINTS = {
+  // 用户相关
+  users: {
+    list: '/users',
+    detail: (id: number | string) => \`/users/\${id}\`,
+    create: '/users',
+    update: (id: number | string) => \`/users/\${id}\`,
+    delete: (id: number | string) => \`/users/\${id}\`
+  },
+  // 产品相关
+  products: {
+    list: '/products',
+    detail: (id: number | string) => \`/products/\${id}\`,
+    create: '/products',
+    update: (id: number | string) => \`/products/\${id}\`,
+    delete: (id: number | string) => \`/products/\${id}\`
+  },
+  // 文件相关
+  files: {
+    upload: '/files/upload',
+    uploadBatch: '/files/upload/batch'
+  }
+};
+
+export default API_CONFIG;
+`;
+
+    const filePath = path.join(this.outputDir, 'api', 'config.ts');
+    await fs.writeFile(filePath, apiConfig);
+    console.log('已生成 API 配置文件: api/config.ts');
+  }
+
+  async generateRequestUtils() {
+    const requestUtils = `import axios, { AxiosRequestConfig, AxiosResponse } from 'axios';
+import { API_CONFIG } from '../api/config';
+
+/**
+ * 创建 axios 实例
+ */
+const instance = axios.create({
+  baseURL: API_CONFIG.baseURL,
+  timeout: API_CONFIG.timeout,
+  headers: API_CONFIG.headers
+});
+
+/**
+ * 请求拦截器
+ */
+instance.interceptors.request.use(
+  (config) => {
+    // 添加 token
+    const token = localStorage.getItem('token') || sessionStorage.getItem('token');
+    if (token) {
+      config.headers.Authorization = \`Bearer \${token}\`;
+    }
+    return config;
+  },
+  (error) => {
+    return Promise.reject(error);
+  }
+);
+
+/**
+ * 响应拦截器
+ */
+instance.interceptors.response.use(
+  (response: AxiosResponse) => {
+    const { data } = response;
+    // 根据实际业务调整
+    if (data.code === 200 || data.code === 201) {
+      return data.data;
+    }
+    return Promise.reject(new Error(data.message || '请求失败'));
+  },
+  (error) => {
+    // 处理错误
+    if (error.response) {
+      const { status } = error.response;
+      switch (status) {
+        case 401:
+          // 未授权，跳转登录
+          console.error('未授权，请重新登录');
+          break;
+        case 403:
+          console.error('没有权限访问');
+          break;
+        case 404:
+          console.error('请求的资源不存在');
+          break;
+        case 500:
+          console.error('服务器错误');
+          break;
+        default:
+          console.error('请求失败');
+      }
+    }
+    return Promise.reject(error);
+  }
+);
+
+/**
+ * 通用请求方法
+ */
+export const request = {
+  /**
+   * GET 请求
+   */
+  get<T = any>(url: string, params?: any, config?: AxiosRequestConfig): Promise<T> {
+    return instance.get(url, { params, ...config });
+  },
+
+  /**
+   * POST 请求
+   */
+  post<T = any>(url: string, data?: any, config?: AxiosRequestConfig): Promise<T> {
+    return instance.post(url, data, config);
+  },
+
+  /**
+   * PUT 请求
+   */
+  put<T = any>(url: string, data?: any, config?: AxiosRequestConfig): Promise<T> {
+    return instance.put(url, data, config);
+  },
+
+  /**
+   * DELETE 请求
+   */
+  delete<T = any>(url: string, params?: any, config?: AxiosRequestConfig): Promise<T> {
+    return instance.delete(url, { params, ...config });
+  },
+
+  /**
+   * PATCH 请求
+   */
+  patch<T = any>(url: string, data?: any, config?: AxiosRequestConfig): Promise<T> {
+    return instance.patch(url, data, config);
+  },
+
+  /**
+   * 上传文件
+   */
+  upload<T = any>(url: string, formData: FormData, config?: AxiosRequestConfig): Promise<T> {
+    return instance.post(url, formData, {
+      ...config,
+      headers: {
+        'Content-Type': 'multipart/form-data',
+        ...config?.headers
+      }
+    });
+  },
+
+  /**
+   * 下载文件
+   */
+  download(url: string, params?: any, filename?: string): Promise<void> {
+    return instance.get(url, {
+      params,
+      responseType: 'blob'
+    }).then((response: any) => {
+      const blob = new Blob([response]);
+      const link = document.createElement('a');
+      link.href = URL.createObjectURL(blob);
+      link.download = filename || 'download';
+      link.click();
+      URL.revokeObjectURL(link.href);
+    });
+  }
+};
+
+export default request;
+`;
+
+    const filePath = path.join(this.outputDir, 'request', 'index.ts');
+    await fs.writeFile(filePath, requestUtils);
+    console.log('已生成请求工具文件: request/index.ts');
+  }
+
+  async generateIndexFile() {
+    const indexContent = `/**
+ * 自动生成的 API SDK
+ * 提供一站式的 API 调用解决方案
+ */
+
+// 导出所有服务
+export { default as usersService } from './services/Users.service';
+export { default as productsService } from './services/Products.service';
+export { default as filesService } from './services/Files.service';
+
+// 导出请求工具
+export { request } from './request';
+export { default as request } from './request';
+
+// 导出 API 配置
+export { API_CONFIG, API_ENDPOINTS } from './api/config';
+
+// 导出所有模型类型
+export * from './models/Users/User.model';
+export * from './models/Users/UserCreate.model';
+export * from './models/Users/UserUpdate.model';
+export * from './models/Products/Product.model';
+export * from './models/Products/ProductCreate.model';
+export * from './models/Products/ProductUpdate.model';
+export * from './models/Files/FileInfo.model';
+export * from './models/Users/Error.model';
+
+/**
+ * 使用示例：
+ * 
+ * // 方式1: 使用服务类（推荐）
+ * import { usersService } from './index';
+ * const users = await usersService.getUserList({});
+ * 
+ * // 方式2: 使用请求工具
+ * import { request, API_ENDPOINTS } from './index';
+ * const users = await request.get(API_ENDPOINTS.users.list);
+ */
+`;
+
+    const filePath = path.join(this.outputDir, 'index.ts');
+    await fs.writeFile(filePath, indexContent);
+    console.log('已生成入口文件: index.ts');
   }
 }
 
