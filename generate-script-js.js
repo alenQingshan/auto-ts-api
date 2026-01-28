@@ -2,7 +2,7 @@ const fs = require('fs-extra');
 const path = require('path');
 const SwaggerParser = require('@apidevtools/swagger-parser');
 
-class SwaggerToTsGenerator {
+class SwaggerToJsGenerator {
   constructor(swaggerPath, outputDir) {
     this.swaggerPath = swaggerPath;
     this.outputDir = outputDir;
@@ -26,10 +26,10 @@ class SwaggerToTsGenerator {
       // 生成所有服务
       await this.generateServices();
       
-      // 复制 base.service.ts 到 services 目录
+      // 复制 base.service.js 到 services 目录
       await this.copyBaseService();
       
-      console.log('生成完成！');
+      console.log('JS 版本生成完成！');
     } catch (error) {
       console.error('生成错误:', error);
     }
@@ -51,14 +51,14 @@ class SwaggerToTsGenerator {
   }
 
   async copyBaseService() {
-    const baseServicePath = path.join(process.cwd(), 'base.service.ts');
-    const targetPath = path.join(this.outputDir, 'services', 'base.service.ts');
+    const baseServicePath = path.join(process.cwd(), 'base.service.js');
+    const targetPath = path.join(this.outputDir, 'services', 'base.service.js');
     
     if (await fs.pathExists(baseServicePath)) {
       await fs.copy(baseServicePath, targetPath);
-      console.log(`已复制 base.service.ts 到 ${targetPath}`);
+      console.log(`已复制 base.service.js 到 ${targetPath}`);
     } else {
-      console.warn(`警告: 未找到 base.service.ts 文件 (${baseServicePath})`);
+      console.warn(`警告: 未找到 base.service.js 文件 (${baseServicePath})`);
     }
   }
 
@@ -208,11 +208,11 @@ class SwaggerToTsGenerator {
         // 修改schema中的$ref引用
         const updatedSchema = JSON.parse(JSON.stringify(schema));
         
-        const interfaceCode = this.generateInterface(simplifiedModelName, updatedSchema, folderName);
-        const fileName = `${cleanModelName}.model.ts`;
+        const modelCode = this.generateJSDocModel(simplifiedModelName, updatedSchema, folderName);
+        const fileName = `${cleanModelName}.model.js`;
         const filePath = path.join(folderPath, fileName);
         
-        await fs.writeFile(filePath, interfaceCode);
+        await fs.writeFile(filePath, modelCode);
         console.log(`生成模型: ${folderName}/${fileName}`);
     }
   }
@@ -221,20 +221,10 @@ class SwaggerToTsGenerator {
   inferTagFromName(schemaName) {
     const name = schemaName.toLowerCase();
     
-    if (name.startsWith('core')) return 'users'; // CoreUser, CoreRole 等
-    if (name.startsWith('cultural')) return 'cultural_products';
-    if (name.startsWith('lib')) return 'library_books';
-    if (name.startsWith('news')) return 'news_articles';
-    if (name.startsWith('veg')) return 'veg_articles';
-    if (name.startsWith('email')) return 'email_templates';
-    if (name.startsWith('sms')) return 'sms_templates';
-    if (name.startsWith('automation')) return 'automation';
-    if (name.startsWith('conf') || name.startsWith('config')) return 'config_region';
-    if (name.startsWith('datadict')) return 'config_data_dict';
-    if (name.startsWith('security')) return 'security';
-    if (name.startsWith('sensitiveword')) return 'config_sensitive_word';
-    if (name.startsWith('tts')) return 'TTS';
-    if (name.startsWith('aichat')) return 'AI-chat';
+    if (name.startsWith('user')) return 'Users';
+    if (name.startsWith('product')) return 'Products';
+    if (name.startsWith('file')) return 'Files';
+    if (name.startsWith('error')) return 'common';
     
     return 'common';
   }
@@ -242,11 +232,16 @@ class SwaggerToTsGenerator {
   async generateServices() {
     if (!this.api.paths) return;
 
+    const generatedServices = new Set();
+
     for (const [routePath, methods] of Object.entries(this.api.paths)) {
       for (const [method, operation] of Object.entries(methods)) {
         if (typeof operation === 'object' && operation.tags) {
           for (const tag of operation.tags) {
-            await this.generateServiceForTag(tag);
+            if (!generatedServices.has(tag)) {
+              await this.generateServiceForTag(tag);
+              generatedServices.add(tag);
+            }
           }
         }
       }
@@ -256,73 +251,77 @@ class SwaggerToTsGenerator {
   async generateServiceForTag(tagName) {
     const serviceName = `${this.toPascalCase(tagName)}Service`;
     const serviceCode = this.generateServiceCode(serviceName, tagName);
-    const fileName = `${this.toCleanFileName(tagName)}.service.ts`;
+    const fileName = `${this.toCleanFileName(tagName)}.service.js`;
     const filePath = path.join(this.outputDir, 'services', fileName);
     
     await fs.writeFile(filePath, serviceCode);
     console.log(`生成服务: ${fileName}`);
   }
 
-  generateInterface(modelName, schema, currentFolder) {
-    let propertiesCode = '';
-    const imports = new Set();
-    // 使用清理后的名称作为接口名
-    const cleanInterfaceName = this.toCleanFileName(modelName);
+  generateJSDocModel(modelName, schema, currentFolder) {
+    let propertiesDoc = '';
+    const cleanModelName = this.toCleanFileName(modelName);
     
     if (schema.properties) {
       for (const [propName, propSchema] of Object.entries(schema.properties)) {
-        const type = this.getTypescriptType(propSchema);
+        const type = this.getJSDocType(propSchema);
+        const description = propSchema.description || propName;
         const isOptional = !schema.required || !schema.required.includes(propName);
         
-        // 检查类型是否是对其他模型的引用
-        if (type !== 'string' && type !== 'number' && type !== 'boolean' && type !== 'any' && !type.includes('[]')) {
-          // 避免导入自身
-          if (type !== cleanInterfaceName) {
-            const targetFolder = this.getTagForSchema(type) || this.inferTagFromName(type);
-            const targetFolderName = this.tagToFolderName(targetFolder);
-            const importPath = this.getModelImportPath(currentFolder, targetFolderName, type);
-            imports.add(`import { ${type} } from '${importPath}';`);
-          }
-        }
-        
-        // 处理数组类型中的引用
-        if (type.includes('[]')) {
-          const elementType = type.replace('[]', '');
-          if (elementType !== 'string' && elementType !== 'number' && elementType !== 'boolean' && elementType !== 'any') {
-            if (elementType !== cleanInterfaceName) {
-              const targetFolder = this.getTagForSchema(elementType) || this.inferTagFromName(elementType);
-              const targetFolderName = this.tagToFolderName(targetFolder);
-              const importPath = this.getModelImportPath(currentFolder, targetFolderName, elementType);
-              imports.add(`import { ${elementType} } from '${importPath}';`);
-            }
-          }
-        }
-        
-        // 添加属性描述注释
-        const description = propSchema.description || `${propName}`;
-        propertiesCode += `  /**
-   * ${description}
-   */
-  ${propName}${isOptional ? '?' : ''}: ${type} | null;
-`;
+        propertiesDoc += ` * @property {${type}${isOptional ? '|null' : ''}} ${propName} - ${description}\n`;
       }
     }
 
-    // 生成导入语句
-    const importStatements = imports.size > 0 ? Array.from(imports).join('\n') + '\n\n' : '';
-
-    return `${importStatements}export interface ${cleanInterfaceName} {
-${propertiesCode}}`;
+    return `/**
+ * ${cleanModelName} 模型
+${propertiesDoc} */
+class ${cleanModelName} {
+  constructor(data = {}) {
+${this.generateConstructorBody(schema)}
   }
 
-  // 获取模型导入路径（从当前文件夹导入目标文件夹的模型）
-  getModelImportPath(currentFolder, targetFolder, modelName) {
-    if (currentFolder === targetFolder) {
-      // 同一文件夹，使用相对路径
-      return `./${this.toCleanFileName(modelName)}.model`;
-    } else {
-      // 不同文件夹，需要回到 models 目录再进入目标文件夹
-      return `../${targetFolder}/${this.toCleanFileName(modelName)}.model`;
+  /**
+   * 从响应数据创建实例
+   * @param {Object} data - 响应数据
+   * @returns {${cleanModelName}}
+   */
+  static fromResponse(data) {
+    return new ${cleanModelName}(data);
+  }
+
+  /**
+   * 转换为 JSON 对象
+   * @returns {Object}
+   */
+  toJSON() {
+    return { ...this };
+  }
+}
+
+module.exports = ${cleanModelName};
+`;
+  }
+
+  generateConstructorBody(schema) {
+    if (!schema.properties) return '    // No properties';
+    
+    let body = '';
+    for (const [propName, propSchema] of Object.entries(schema.properties)) {
+      const defaultValue = this.getDefaultValue(propSchema);
+      body += `    this.${propName} = data.${propName} !== undefined ? data.${propName} : ${defaultValue};\n`;
+    }
+    return body;
+  }
+
+  getDefaultValue(schema) {
+    switch (schema.type) {
+      case 'string': return 'null';
+      case 'number': 
+      case 'integer': return 'null';
+      case 'boolean': return 'null';
+      case 'array': return 'null';
+      case 'object': return 'null';
+      default: return 'null';
     }
   }
 
@@ -334,9 +333,12 @@ ${propertiesCode}}`;
       methodsCode += this.generateServiceMethod(method);
     }
 
-    return `import { BaseService, ExtOptions } from './base.service';
-${this.generateImports(methods)}
+    return `const BaseService = require('./base.service');
 
+/**
+ * ${serviceName}
+ * @extends BaseService
+ */
 class ${serviceName} extends BaseService {
   constructor() {
     super();
@@ -344,39 +346,39 @@ class ${serviceName} extends BaseService {
 ${methodsCode}
 }
 
-export default new ${serviceName}();`;
+module.exports = new ${serviceName}();
+`;
   }
 
   generateServiceMethod(method) {
     const { operation, path, httpMethod } = method;
     const methodName = this.getMethodName(operation.operationId || httpMethod + path);
     const params = this.getMethodParams(path);
-    const requestBodyType = this.getRequestBodyType(operation);
-    const returnType = this.getReturnType(operation);
+    const requestBodyType = this.getJSDocType(this.getRequestBodySchema(operation));
+    const returnType = this.getJSDocType(this.getReturnSchema(operation));
     const url = this.generateUrl(path, params);
 
     // 处理参数在 URL 中的情况
     let paramArgs = '';
+    let paramDocs = '';
     
     if (params.length > 0) {
-      paramArgs = params.map(param => `${param}: string | number`).join(', ') + ', data: ' + requestBodyType;
+      paramArgs = params.map(param => param).join(', ') + ', data';
+      paramDocs = params.map(param => `   * @param {string|number} ${param} - URL 参数\n`).join('');
     } else {
-      paramArgs = `data: ${requestBodyType}`;
+      paramArgs = 'data';
     }
-
-    // 生成参数注释
-    const paramComments = params.length > 0 
-      ? params.map(param => `   * @param ${param} string | number`).join('\n') + '\n' 
-      : '';
 
     return `
   /**
    * ${operation.summary || '无描述'}
-${paramComments}   * @param data ${requestBodyType}
+${paramDocs}   * @param {${requestBodyType}} data - 请求数据
+   * @param {Object} extOptions - 扩展选项
+   * @returns {Promise<${returnType}>}
    */
-  ${methodName}(${paramArgs}, extOptions?: ExtOptions): Promise<${returnType}> {
+  async ${methodName}(${paramArgs}, extOptions = {}) {
     const url = \`${url}\`;
-    return this.request<${returnType}>('${httpMethod}', url, data, extOptions);
+    return this.request('${httpMethod.toUpperCase()}', url, data, extOptions);
   }
 `;
   }
@@ -417,121 +419,79 @@ ${paramComments}   * @param data ${requestBodyType}
     for (const param of params) {
       url = url.replace(`{${param}}`, `\${${param}}`);
     }
-    // 直接返回处理后的路径，不再添加额外的/api前缀
     return url;
   }
 
   getMethodName(operationId) {
-    // 改进的操作ID转换逻辑，保留下划线并正确处理特殊字符
-    // 首先将所有非字母数字字符（除了下划线）替换为下划线
     let normalizedId = operationId.replace(/[^a-zA-Z0-9_]/g, '_');
-    // 然后调用toCamelCase处理下划线
     return this.toCamelCase(normalizedId);
   }
 
-  getRequestBodyType(operation) {
-    // 兼容 Swagger 2.0 和 OpenAPI 3.0
+  getRequestBodySchema(operation) {
     if (operation.requestBody && operation.requestBody.content) {
       const content = operation.requestBody.content;
       if (content['application/json'] && content['application/json'].schema) {
-        return this.getTypescriptType(content['application/json'].schema);
+        return content['application/json'].schema;
       }
     } else if (operation.parameters) {
       const bodyParam = operation.parameters.find(p => p.in === 'body');
       if (bodyParam && bodyParam.schema) {
-        return this.getTypescriptType(bodyParam.schema);
+        return bodyParam.schema;
       }
     }
-    return 'any';
+    return { type: 'object' };
   }
 
-  getReturnType(operation) {
+  getReturnSchema(operation) {
     if (operation.responses && operation.responses['200']) {
       const response = operation.responses['200'];
-      // 兼容 Swagger 2.0 和 OpenAPI 3.0
       if (response.content && response.content['application/json'] && response.content['application/json'].schema) {
-        return this.getTypescriptType(response.content['application/json'].schema);
+        return response.content['application/json'].schema;
       } else if (response.schema) {
-        return this.getTypescriptType(response.schema);
+        return response.schema;
       }
     }
-    return 'any';
+    return { type: 'object' };
   }
 
-  generateImports(methods) {
-    const imports = new Set();
+  getJSDocType(schema) {
+    if (!schema) return 'Object';
     
-    for (const method of methods) {
-      const requestBodyType = this.getRequestBodyType(method.operation);
-      const returnType = this.getReturnType(method.operation);
-      
-      // 处理请求体类型
-      if (requestBodyType !== 'any' && !requestBodyType.includes('[]')) {
-        const targetFolder = this.getTagForSchema(requestBodyType) || this.inferTagFromName(requestBodyType);
-        const targetFolderName = this.tagToFolderName(targetFolder);
-        imports.add(`import { ${requestBodyType} } from '../models/${targetFolderName}/${this.toCleanFileName(requestBodyType)}.model';`);
-      }
-      
-      // 处理返回类型，跳过数组类型的导入
-      if (returnType !== 'any' && !returnType.includes('[]')) {
-        const targetFolder = this.getTagForSchema(returnType) || this.inferTagFromName(returnType);
-        const targetFolderName = this.tagToFolderName(targetFolder);
-        imports.add(`import { ${returnType} } from '../models/${targetFolderName}/${this.toCleanFileName(returnType)}.model';`);
-      }
-    }
-    
-    return Array.from(imports).join('\n');
-  }
-
-  getTypescriptType(schema) {
     if (schema.$ref) {
       const refName = schema.$ref.split('/').pop();
-      // 先简化名称，再清理特殊字符
       const simplifiedName = this.simplifySchemaName(refName);
       return this.toCleanFileName(simplifiedName);
     }
     
     switch (schema.type) {
       case 'string': return 'string';
-      case 'number': return 'number';
+      case 'number': 
       case 'integer': return 'number';
       case 'boolean': return 'boolean';
       case 'array': 
-        return `${this.getTypescriptType(schema.items)}[]`;
-      case 'object': return 'any';
-      default: return 'any';
+        return `Array<${this.getJSDocType(schema.items)}>`;
+      case 'object': return 'Object';
+      default: return 'Object';
     }
   }
 
-  toKebabCase(str) {
-    return str.replace(/([a-z])([A-Z])/g, '$1-$2').toLowerCase();
-  }
-
-  // 生成没有点号、中划线、下划线(末尾)和其他特殊字符的合法文件名
   toCleanFileName(str) {
-    // 替换所有点号、中划线为空白
     let cleanStr = str.replace(/[.-]/g, '');
-    // 移除所有非字母数字字符（除了下划线）
     cleanStr = cleanStr.replace(/[^a-zA-Z0-9_]/g, '');
-    // 移除文件名末尾的下划线
     cleanStr = cleanStr.replace(/_+$/, '');
     return cleanStr;
   }
 
-  // 简化复杂的schema名称
   simplifySchemaName(str) {
-    // 处理ResponseSchema_List_app.schemas.tenant_schema.CoreTenantRead__这样的名称
     if (str.startsWith('ResponseSchema_') && str.includes('List_')) {
       const match = str.match(/_List_.+_(\w+)__$/);
       if (match && match[1]) {
         return `ResponseSchemaList${this.toPascalCase(match[1])}`;
       }
     }
-    // 处理其他ResponseSchema_开头的名称
     if (str.startsWith('ResponseSchema_')) {
       const parts = str.split('_');
       if (parts.length > 1) {
-        // 移除ResponseSchema_前缀，并将剩余部分转换为驼峰命名
         const rest = parts.slice(1).join('_');
         return `ResponseSchema${this.toPascalCase(rest)}`;
       }
@@ -546,18 +506,16 @@ ${paramComments}   * @param data ${requestBodyType}
   }
 
   toPascalCase(str) {
-    // 特殊处理带有下划线的字符串，如email_channels
     if (str.includes('_')) {
       return str.split('_').map(part => 
         part.charAt(0).toUpperCase() + part.slice(1).toLowerCase()
       ).join('');
     }
-    // 对于没有下划线的字符串，使用原来的逻辑
     const camelCase = this.toCamelCase(str);
     return camelCase.charAt(0).toUpperCase() + camelCase.slice(1);
   }
 }
 
 // 使用示例
-const generator = new SwaggerToTsGenerator('./swagger.json', './src-ts');
+const generator = new SwaggerToJsGenerator('./swagger.json', './src-js');
 generator.generate();

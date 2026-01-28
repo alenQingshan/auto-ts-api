@@ -14,9 +14,10 @@
 [gitee项目地址](https://gitee.com/alenliuqingshan/auto-ts-api)
 
 ### ✨ 主要功能
-- 自动解析Swagger/OpenAPI 3.1.x规范的JSON文件
-- 生成TypeScript接口定义（Models）
-- 生成类型安全的API服务类（Services）
+- 自动解析 Swagger/OpenAPI 3.0 规范的 JSON 文件
+- 生成 TypeScript 接口定义（Models）和 API 服务类（Services）
+- 生成 JavaScript 模型（Models）和 API 服务类（Services）
+- 支持 TypeScript 和 JavaScript 两种输出格式
 - 支持自定义扩展配置
 - 一键生成，快速集成到前端项目
 
@@ -37,13 +38,37 @@ npm install
 
 ### 生成API代码
 
-运行以下命令生成TypeScript API代码：
+**生成 TypeScript 版本：**
 
 ```bash
-node generate-script.js
+npm run generate:api:ts
 ```
 
-生成的代码将会保存在`src/models`和`src/services`目录下。
+生成的代码将会保存在 `src-ts/models` 和 `src-ts/services` 目录下。
+
+**生成 JavaScript 版本：**
+
+```bash
+npm run generate:api:js
+```
+
+生成的代码将会保存在 `src-js/models` 和 `src-js/services` 目录下。
+
+**同时生成两种版本：**
+
+```bash
+npm run generate:api:all
+```
+
+**监听模式（自动生成）：**
+
+```bash
+# TypeScript 监听模式
+npm run generate:api:watch:ts
+
+# JavaScript 监听模式
+npm run generate:api:watch:js
+```
 
 ### 访问Swagger UI
 
@@ -57,45 +82,82 @@ node swagger-server.js
 ## 📁 项目结构
 
 ```
-├── generate-script.js       # 代码生成脚本
+├── generate-script.js       # TypeScript 代码生成脚本
+├── generate-script-js.js    # JavaScript 代码生成脚本
+├── base.service.ts          # TypeScript 基础服务类模板
+├── base.service.js          # JavaScript 基础服务类模板
 ├── swagger.json             # Swagger API定义文件
+├── swagger-server.js        # Swagger UI 服务器
 ├── package.json             # 项目依赖配置
-└── src/
-    ├── models/              # 生成的TypeScript接口定义
-    │   ├── *.model.ts       # 数据模型文件
-    └── services/            # 生成的API服务类
-        ├── base.service.ts  # 基础服务类
-        └── *.service.ts     # 各模块API服务
+├── src-ts/                  # TypeScript 生成目录
+│   ├── models/              # 生成的 TypeScript 接口定义
+│   │   └── *.model.ts       # 数据模型文件
+│   └── services/            # 生成的 TypeScript API 服务类
+│       ├── base.service.ts  # 基础服务类
+│       └── *.service.ts     # 各模块API服务
+└── src-js/                  # JavaScript 生成目录
+    ├── models/              # 生成的 JavaScript 模型类
+    │   └── *.model.js       # 数据模型文件
+    └── services/            # 生成的 JavaScript API 服务类
+        ├── base.service.js  # 基础服务类
+        └── *.service.js     # 各模块API服务
 ```
 
 ## 🛠 使用方法
 
 ### 模型使用
 
-生成的模型文件可以直接导入使用，获得完整的类型提示：
+**TypeScript 模型：**
 
 ```typescript
-import { LoginRequest, TokenResponse } from './models';
+import { UserCreate, User } from './src-ts/models/Users/User.model';
 
-const loginData: LoginRequest = {
-  // 获得完整的类型提示
+const userData: UserCreate = {
+  username: 'john_doe',
+  email: 'john@example.com',
+  password: 'Password123!'
 };
+```
+
+**JavaScript 模型：**
+
+```javascript
+const UserCreate = require('./src-js/models/Users/UserCreate.model');
+
+const userData = new UserCreate({
+  username: 'john_doe',
+  email: 'john@example.com',
+  password: 'Password123!'
+});
 ```
 
 ### API服务使用
 
-使用生成的API服务类进行网络请求：
+**TypeScript API 服务：**
 
 ```typescript
-import authService from './services/auth.service';
+import usersService from './src-ts/services/Users.service';
 
-// 调用登录API
 try {
-  const response = await authService.loginAuthLoginPost(loginData);
-  console.log('登录成功:', response);
+  const response = await usersService.createUser(userData);
+  console.log('用户创建成功:', response);
 } catch (error) {
-  console.error('登录失败:', error);
+  console.error('用户创建失败:', error);
 }
+```
+
+**JavaScript API 服务：**
+
+```javascript
+const usersService = require('./src-js/services/Users.service');
+
+usersService.createUser(userData)
+  .then(response => {
+    console.log('用户创建成功:', response);
+  })
+  .catch(error => {
+    console.error('用户创建失败:', error);
+  });
 ```
 
 ## 🔧 自定义配置

@@ -1,7 +1,10 @@
 {
   "scripts": {
-    "generate:api": "node generate-script.js",
-    "generate:api:watch": "nodemon generate-script.js",
+    "generate:api:ts": "node generate-script.js",
+    "generate:api:js": "node generate-script-js.js",
+    "generate:api:all": "npm run generate:api:ts && npm run generate:api:js",
+    "generate:api:watch:ts": "nodemon generate-script.js",
+    "generate:api:watch:js": "nodemon generate-script-js.js",
     "start:swagger": "node swagger-server.js"
   },
   "devDependencies": {
@@ -10,5 +13,8 @@
     "nodemon": "^3.0.1",
     "@apidevtools/swagger-parser": "^12.0.0",
     "swagger-ui-express": "^5.0.1"
+  },
+  "dependencies": {
+    "axios": "^1.6.0"
   }
 }
